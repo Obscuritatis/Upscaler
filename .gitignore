@@ -1,0 +1,6 @@
+tools/
+build/
+dist/
+__pycache__/
+*.spec
+upscaler-log.txt

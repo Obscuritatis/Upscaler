@@ -1,0 +1,53 @@
+name: Windows-programma bouwen
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  bouw:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Onderdelen installeren
+        run: python -m pip install pyinstaller numpy opencv-python-headless onnxruntime-directml
+
+      - name: Upscaler4K.exe bouwen
+        run: >
+          python -m PyInstaller --noconfirm --clean --windowed --name Upscaler4K
+          --hidden-import numpy --hidden-import cv2 --collect-all onnxruntime
+          upscaler.py
+
+      - name: Controleren of alles werkt
+        shell: pwsh
+        run: |
+          $p = Start-Process -FilePath dist\Upscaler4K\Upscaler4K.exe -ArgumentList "--selftest", "$PWD\selftest.txt" -Wait -PassThru
+          Get-Content selftest.txt
+          if ($p.ExitCode -ne 0) { throw "Zelftest mislukt (code $($p.ExitCode))" }
+          if (-not (Select-String -Path selftest.txt -Pattern "DmlExecutionProvider" -Quiet)) { throw "DirectML ontbreekt" }
+
+      - name: Zip maken
+        shell: pwsh
+        run: |
+          Copy-Item LEESMIJ.md dist\Upscaler4K\
+          Compress-Archive -Path dist\Upscaler4K -DestinationPath Upscaler4K-windows.zip
+
+      - name: Publiceren als download
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ github.run_number }}
+          name: Upscaler4K versie ${{ github.run_number }}
+          body: |
+            Download **Upscaler4K-windows.zip**, pak hem uit en dubbelklik op `Upscaler4K.exe`.
+            Bijgewerkt vanaf commit ${{ github.sha }}.
+          files: Upscaler4K-windows.zip
+          make_latest: true
